@@ -1,0 +1,11 @@
+flask
+ollama
+pynmea2
+reverse_geocoder
+psutil
+pyserial
+psycopg2-binary
+SpeechRecognition
+PyAudio
+piper-tts
+numpy
