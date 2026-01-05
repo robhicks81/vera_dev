@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V.E.R.A. Command Interface</title>
+    <style>
+        body { background-color: #0d1117; color: #00f0ff; font-family: 'Courier New', monospace; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; height: 90vh; }
+        
+        .header { border-bottom: 2px solid #00f0ff; padding-bottom: 10px; margin-bottom: 15px; }
+        .telemetry { background: #161b22; padding: 10px; border: 1px solid #30363d; margin-bottom: 15px; color: #7ee787; font-size: 0.9em; display: flex; justify-content: space-between; }
+        
+        /* SPLIT SCREEN LAYOUT */
+        .visualizer-container { flex: 1; border: 1px solid #30363d; background: #010409; margin-bottom: 15px; position: relative; }
+        canvas { width: 100%; height: 100%; display: block; }
+        
+        .chat-box { flex: 1; overflow-y: scroll; border: 1px solid #30363d; padding: 10px; background: #010409; margin-bottom: 15px; }
+        
+        /* UI ELEMENTS */
+        .message { margin-bottom: 8px; padding: 8px; border-radius: 4px; font-size: 0.95em; }
+        .user { background: #1f6feb; color: white; text-align: right; }
+        .vera { background: #238636; color: white; text-align: left; }
+        
+        .input-area { display: flex; height: 50px; }
+        input[type="text"] { flex-grow: 1; padding: 10px; background: #0d1117; border: 1px solid #00f0ff; color: white; font-family: inherit; font-size: 1.1em; }
+        button { width: 150px; padding: 10px; background: #00f0ff; border: none; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 1.1em; }
+        button:hover { background: #00bcd4; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔹 V.E.R.A. <span style="font-size:0.5em; color:#7ee787">// v1.3 OPTICAL</span></h1>
+        </div>
+
+        <div class="telemetry">
+            <span>TIME: <span id="time">Loading...</span></span>
+            <span>GPS: <span id="gps-status" style="color:red">OFFLINE</span></span>
+            <span>ENGINE: <span id="engine-status" style="color:#00f0ff">STANDBY</span></span>
+        </div>
+
+        <div class="visualizer-container">
+            <canvas id="visualizer"></canvas>
+        </div>
+
+        <div class="chat-box" id="chat-box">
+            <div class="message vera">System Online. Visual Interface Active.</div>
+        </div>
+
+        <form class="input-area" onsubmit="sendMessage(event)">
+            <input type="text" id="user-input" placeholder="Enter command..." autocomplete="off">
+            <button type="submit">SEND</button>
+        </form>
+        <div class="controls" style="margin-top: 20px; border-top: 1px solid #30363d; padding-top: 10px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button onclick="confirmAction('reboot')" style="background: #d29922; color: black; width: auto; font-size: 0.8em;">REBOOT SYSTEM</button>
+            <button onclick="confirmAction('shutdown')" style="background: #da3633; color: white; width: auto; font-size: 0.8em;">SHUTDOWN</button>
+        </div>
+    </div>
+
+    <script>
+        // --- HIGH RES OSCILLOSCOPE ---
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let canvas = document.getElementById("visualizer");
+        let ctx = canvas.getContext("2d");
+        let animationId;
+
+        // Dynamic Resizing for Crisp Lines
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.offsetWidth;
+            canvas.height = canvas.parentElement.offsetHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas(); // Initial call
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048; 
+                let bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+            }
+        }
+
+        function playWithVisuals(url) {
+            initAudio(); 
+            const audio = new Audio(url);
+            audio.crossOrigin = "anonymous"; 
+            
+            const source = audioContext.createMediaElementSource(audio);
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+            
+            audio.play();
+            drawOscilloscope();
+            
+            audio.onended = () => {
+                cancelAnimationFrame(animationId);
+                // Draw Flat Line
+                ctx.fillStyle = '#010409';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#00f0ff';
+                ctx.beginPath();
+                ctx.moveTo(0, canvas.height/2);
+                ctx.lineTo(canvas.width, canvas.height/2);
+                ctx.stroke();
+            };
+        }
+
+        function drawOscilloscope() {
+            animationId = requestAnimationFrame(drawOscilloscope);
+            analyser.getByteTimeDomainData(dataArray);
+
+            ctx.fillStyle = '#010409';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.lineWidth = 3; // Thicker line for the big screen
+            ctx.strokeStyle = '#00f0ff';
+            ctx.beginPath();
+
+            let sliceWidth = canvas.width * 1.0 / dataArray.length;
+            let x = 0;
+
+            for(let i = 0; i < dataArray.length; i++) {
+                let v = dataArray[i] / 128.0; 
+                let y = v * canvas.height / 2;
+
+                if(i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                x += sliceWidth;
+            }
+
+            ctx.lineTo(canvas.width, canvas.height/2);
+            ctx.stroke();
+        }
+
+        // --- CORE LOGIC ---
+        setInterval(() => {
+            document.getElementById('time').innerText = new Date().toLocaleTimeString();
+        }, 1000);
+
+        setInterval(async () => {
+            try {
+                const response = await fetch('/telemetry');
+                const data = await response.json();
+                
+                // Update GPS
+                const gpsSpan = document.getElementById('gps-status');
+                gpsSpan.innerText = data.status;
+                gpsSpan.style.color = data.color;
+                
+                // Update Engine (New)
+                const engineSpan = document.getElementById('engine-status');
+                engineSpan.innerText = data.engine;
+                
+                // Optional: Make it Red if CPU is too high (>80%)
+                if (data.engine.includes("CPU: 8") || data.engine.includes("CPU: 9")) {
+                    engineSpan.style.color = "red";
+                } else {
+                    engineSpan.style.color = "#00f0ff";
+                }
+                
+            } catch (e) { }
+        }, 2000);
+
+        async function sendMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('user-input');
+            const chatBox = document.getElementById('chat-box');
+            const text = input.value;
+            if (!text) return;
+
+            chatBox.innerHTML += `<div class="message user">${text}</div>`;
+            input.value = '';
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            });
+            const data = await response.json();
+
+            chatBox.innerHTML += `<div class="message vera">${data.response}</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            if (data.audio_url) {
+                playWithVisuals('/static/' + data.audio_url);
+            }
+        }
+        
+        async function confirmAction(action) {
+            if (confirm(`⚠️ WARNING: Are you sure you want to ${action.toUpperCase()} the system?`)) {
+                // User clicked OK
+                const endpoint = (action === 'shutdown') ? '/system/shutdown' : '/system/reboot';
+                
+                try {
+                    await fetch(endpoint, { method: 'POST' });
+                    alert(`System is ${action}ing. Connection will be lost.`);
+                    document.body.style.opacity = "0.5"; // Dim screen to show offline
+                    document.getElementById('gps-status').innerText = "DISCONNECTED";
+                } catch (e) {
+                    alert("Error sending command.");
+                }
+            }
+        }
+
+        // Initial flat line draw
+        setTimeout(() => {
+            resizeCanvas();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#00f0ff';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height/2);
+            ctx.lineTo(canvas.width, canvas.height/2);
+            ctx.stroke();
+        }, 100);
+    </script>
+</body>
+</html>
