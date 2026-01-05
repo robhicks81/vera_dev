@@ -4,3 +4,22 @@ __pycache__/
 venv/
 .env
 .DS_Store
+# Python Bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# V.E.R.A. Runtime Data (Audio/Logs)
+*.wav
+*.mp3
+*.log
+gps_data.json
+test_output/
+
+# Security (Crucial)
+.env
+secrets.json
