@@ -1,25 +1,18 @@
-__pycache__/
-*.wav
-*.pyc
-venv/
-.env
-.DS_Store
-# Python Bytecode
+# --- Python & System ---
 __pycache__/
 *.py[cod]
-
-# Virtual Environments
+.DS_Store
 venv/
 .venv/
 env/
 
-# V.E.R.A. Runtime Data (Audio/Logs)
+# --- Security ---
+.env
+secrets.json
+
+# --- V.E.R.A. Runtime Data ---
 *.wav
 *.mp3
 *.log
 gps_data.json
 test_output/
-
-# Security (Crucial)
-.env
-secrets.json
