@@ -129,6 +129,6 @@ def system_reboot():
 if __name__ == '__main__':
     print("🔹 V.E.R.A. WEB INTERFACE ONLINE 🔹")
     try:
-        app.run(host='0.0.0.0', port=5000, debug=True)
+        app.run(host='0.0.0.0', port=5000, debug=False)
     finally:
         gps.stop() # Clean shutdown
